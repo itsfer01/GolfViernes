@@ -1027,7 +1027,7 @@ const App = (() => {
 
     // ---- Podio (top 3) ----
     if(res.rows.length>=3){
-      html+=`<div class="podium"><div class="pod-tit">El podio del viernes</div><div class="pod-row">`;
+      html+=`<div class="podium"><div class="pod-tit">El podio del día</div><div class="pod-row">`;
       [1,0,2].forEach(idx=>{ const r=res.rows[idx]; const first=idx===0;
         html+=`<div class="pod-col ${first?'first':''}">
           ${first?`<div class="pod-crown"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b98a2e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l4 3.2L12 5l4.5 6.7 4-3.2-1.6 9.3H5.1Z"/><path d="M5.5 20.5h13"/></svg></div>`:''}
@@ -1058,8 +1058,8 @@ const App = (() => {
       ? `<div class="zeroline"><span class="zchk">✓</span>Cuadra en cero${d.closed?'':' · listo para cerrar'}</div>`
       : `<div class="valbar warn" style="margin-top:12px">⚠ Descuadre de $${res.sum} (revisa capturas incompletas)</div>`;
     html+= d.closed
-      ? `<div class="valbar ok" style="margin-top:6px">✓ Viernes cerrado · ventajas ajustadas (ver historial en Ventajas)</div>`
-      : `<button class="btn block" onclick="App.closeDay()">Cerrar viernes y ajustar ventajas</button>`;
+      ? `<div class="valbar ok" style="margin-top:6px">✓ Día cerrado · ventajas ajustadas (ver historial en Ventajas)</div>`
+      : `<button class="btn block" onclick="App.closeDay()">Cerrar el día y ajustar ventajas</button>`;
     html+=`<div class="exprow"><button class="expbtn" onclick="App.exportImage()">📸 Imagen</button></div>`;
 
     // desglose
@@ -1647,9 +1647,9 @@ const App = (() => {
   // ---- Cerrar viernes + sliding automático ----
   function closeDay(){
     const d=curDay(); if(!d) return;
-    if(d.closed){ toast('Este viernes ya está cerrado'); return; }
+    if(d.closed){ toast('Este día ya está cerrado'); return; }
     const val=validateDay(d);
-    const proceed=()=>confirmModal('Cerrar el viernes ajusta las ventajas (sliding) según quién ganó el head-to-head. ¿Continuar?','Cerrar y ajustar',()=>doCloseDay(d));
+    const proceed=()=>confirmModal('Cerrar el día ajusta las ventajas (sliding) según quién ganó el head-to-head. ¿Continuar?','Cerrar y ajustar',()=>doCloseDay(d));
     if(!val.allOk){
       const list=val.issues.slice(0,6).map(i=>i.name+' '+i.msg).join(' · ')+(val.issues.length>6?' …':'');
       confirmModal('Hay capturas incompletas:<br><b>'+list+'</b><br>¿Cerrar de todas formas?','Sí, cerrar igual',proceed);
@@ -1665,7 +1665,7 @@ const App = (() => {
       logVent(a,b,from,to,'auto',d.id);
     }
     d.closed=true; save(); renderLiq();
-    modal(`<h3 style="margin:0 0 6px">✓ Viernes cerrado</h3><div class="hint" style="margin-bottom:14px">Las ventajas (sliding) quedaron ajustadas para el próximo viernes. ¿Mandas el cierre al grupo?</div>
+    modal(`<h3 style="margin:0 0 6px">✓ Día cerrado</h3><div class="hint" style="margin-bottom:14px">Las ventajas (sliding) quedaron ajustadas para la próxima. ¿Mandas el cierre al grupo?</div>
       <button class="btn block" onclick="App.closeModal();App.exportImage()">📸 Compartir cierre</button>
       <button class="btn ghost block" style="margin-top:8px" onclick="App.closeModal()">Listo</button>`);
   }
@@ -2567,13 +2567,13 @@ const App = (() => {
     modal(`<h3>Nuevo día de juego</h3>
       <label class="fl">Fecha</label><input id="m_date" class="txt" type="date" value="${def}">
       <label class="fl" style="margin-top:10px">Etiqueta (opcional)</label>
-      <input id="m_label" class="txt" placeholder="Viernes de rayas">
+      <input id="m_label" class="txt" placeholder="Se pone solo (ej. Jueves 19 jun)">
       <button class="btn block" style="margin-top:14px" onclick="App.createDay()">Crear día</button>`);
   }
   function createDay(){
     const date=document.getElementById('m_date').value;
     let label=document.getElementById('m_label').value.trim();
-    if(!label){ const dt=new Date(date+'T12:00'); label='Viernes '+dt.toLocaleDateString('es-MX',{day:'numeric',month:'short'}); }
+    if(!label){ const dt=new Date(date+'T12:00'); const wd=dt.toLocaleDateString('es-MX',{weekday:'long'}); label=wd.charAt(0).toUpperCase()+wd.slice(1)+' '+dt.toLocaleDateString('es-MX',{day:'numeric',month:'short'}); }
     const lastCourse=(state.days[0]&&state.days[0].courseId)||'campestre';
     const d={id:uid(),date,label,playing:[],salidas:[[],[]],start:1,holes:18,courseId:lastCourse,doubles:{},closed:false,scores:{}};
     state.days.unshift(d); state.currentDayId=d.id; save(); closeModal(); go('day');
