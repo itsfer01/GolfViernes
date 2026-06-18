@@ -54,8 +54,11 @@
     position:sticky;top:0;z-index:30;
     border-bottom:1px solid var(--line);
   }
-  .appbar{display:flex;align-items:center;justify-content:center;padding-bottom:10px}
-  .ab-brand{font-family:'Newsreader',serif;font-style:italic;font-weight:600;font-size:19px;color:var(--fairway);white-space:nowrap;display:flex;align-items:center;gap:8px}
+  .appbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:11px}
+  .ab-brand{font-family:'Newsreader',serif;font-style:italic;font-weight:600;font-size:19px;color:var(--fairway);white-space:nowrap;display:flex;align-items:center;gap:8px;min-width:0}
+  .daypill{display:inline-flex;align-items:center;gap:6px;flex:none;max-width:52%;background:#fff;border:1.5px solid var(--fairway);color:var(--fairway);border-radius:999px;padding:7px 12px;font-weight:700;font-size:13px}
+  .daypill:active{background:var(--paper-2)}
+  .daypill .dp-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .daybar{display:flex;align-items:center;gap:9px;padding:0 0 12px;flex-wrap:wrap}
   .daybar select{
     appearance:none;-webkit-appearance:none;
@@ -457,13 +460,11 @@
   <div class="appbar">
     <div class="ab-brand">
       <span style="display:inline-flex"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M3 16 C5 13 9 12 12 12 C16 12 19 13.5 21 16 C19.5 17.6 16 18.6 12 18.6 C8 18.6 4.5 17.6 3 16 Z" fill="#e6c34a" stroke="#0a6a3a" stroke-width="1.3" stroke-linejoin="round"/><ellipse cx="13.6" cy="15.1" rx="1.3" ry="0.72" fill="#0a6a3a"/><path d="M13.6 15 L13.6 4.2" stroke="#0a6a3a" stroke-width="1.3" stroke-linecap="round"/><path d="M13.6 4.4 L19.2 6.1 L13.6 7.9 Z" fill="#c1272d"/></svg></span>Golf Viernes</div>
-  </div>
-  <div class="daybar">
-    <select id="daySelect" onchange="App.switchDay(this.value)"></select>
-    <button class="pill" onclick="App.daysModal()" title="Administrar días" aria-label="Administrar días">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+    <button class="daypill" id="dayPill" onclick="App.daysModal()" aria-label="Día y administración">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9h17M8 3v3M16 3v3"/></svg>
+      <span class="dp-txt">Días</span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
     </button>
-    <button class="pill" onclick="App.newDayModal()">+ Nuevo</button>
   </div>
 </header>
 
@@ -993,10 +994,10 @@ const App = (() => {
   }
 
   function renderDaySelect(){
-    const sel=document.getElementById('daySelect');
-    if(state.days.length===0){ sel.innerHTML='<option>Sin días aún</option>'; sel.disabled=true; return; }
-    sel.disabled=false;
-    sel.innerHTML=state.days.map(d=>`<option value="${d.id}" ${d.id===state.currentDayId?'selected':''}>${d.label}</option>`).join('');
+    const el=document.getElementById('dayPill'); if(!el) return;
+    const txt=el.querySelector('.dp-txt'); if(!txt) return;
+    const cur=curDay();
+    txt.textContent = cur ? cur.label : 'Crear día';
   }
 
   // ---- Liquidación ----
