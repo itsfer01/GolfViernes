@@ -31,7 +31,7 @@
     --good:#0a6a3a;          /* + dinero a favor */
     --shadow:0 1px 0 rgba(0,0,0,.02),0 10px 30px rgba(15,40,28,.07);
   }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   html,body{margin:0;padding:0;touch-action:manipulation}
   body{
     font-family:'Hanken Grotesk',Inter,system-ui,sans-serif;
@@ -149,6 +149,12 @@
   .chip small{font-size:10px;opacity:.85;font-weight:600}
   .seemore{margin-top:9px;font-size:12.5px;font-weight:700;color:var(--fairway);background:none;border:none;padding:4px 0;cursor:pointer}
   .seemore:active{opacity:.6}
+  .convolist{display:flex;flex-direction:column;margin-top:8px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .convorow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:11px 13px;background:#fff;border:none;border-bottom:1px solid var(--line-2);text-align:left}
+  .convorow:last-child{border-bottom:none}
+  .convorow:active{background:var(--paper-2)}
+  .convorow .cn{font-family:'Newsreader',serif;font-weight:600;font-size:15px;color:var(--ink)}
+  .convorow .cadd{font-size:12px;font-weight:700;color:var(--fairway);background:var(--paper-2);border-radius:999px;padding:4px 11px;flex:none}
 
   /* scorecard */
   .scsel{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px}
@@ -265,6 +271,12 @@
   .sccard td.tt.neg{color:var(--clay);font-weight:700}
   .sccard td.sub,.sccard th.sub{background:#eef5ef;color:var(--fairway);font-weight:700;padding-left:6px;border-left:1px dashed var(--line)}
   .sccard td.hl,.sccard th.hl{background:#eef6f1;box-shadow:inset 0 0 0 1px #bcd9c8}
+  /* Simbología de golf: ○ birdie · ◎ eagle · □ bogey · ▣ doble bogey+ (par = sin marca) */
+  .gsym{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 1px;font-variant-numeric:tabular-nums;line-height:1}
+  .gsym.birdie{border:1.4px solid var(--good);border-radius:50%;color:var(--good);font-weight:700}
+  .gsym.eagle{border:1.4px solid var(--good);border-radius:50%;color:var(--good);font-weight:700;box-shadow:0 0 0 1.2px #fff,0 0 0 2.4px var(--good)}
+  .gsym.bogey{border:1.4px solid var(--clay);color:var(--clay)}
+  .gsym.dbogey{border:1.4px solid var(--clay);color:var(--clay);box-shadow:0 0 0 1.2px #fff,0 0 0 2.4px var(--clay)}
   .seg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:#fff;border:1px solid var(--line);padding:4px;border-radius:999px;margin-bottom:16px}
   .seg3 button{padding:8px 4px;border-radius:999px;font-weight:600;font-size:13px;color:var(--muted);background:transparent}
   .seg3 button.on{background:var(--fairway);color:#fff;font-weight:700}
@@ -425,6 +437,13 @@
   .lb-row .pesos.pos{color:var(--fairway)} .lb-row .pesos.neg{color:var(--clay)} .lb-row .pesos.zero{color:var(--muted-2)}
   .lb-row .rayas{padding-right:12px;text-align:right;font-weight:600;color:#5a655c}
   .lb-row .star{color:var(--amber);font-size:12px}
+  .lb-row .thru{font-size:10px;font-weight:800;letter-spacing:.02em;color:#9a6b00;background:#fbf4e6;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  .lb-row .thru.done{color:var(--good);background:#eafaf0}
+  .pod-tit .pglive{color:#9a6b00}
+  .pod-tit .pgfinal{color:var(--good)}
+  .lbcap{display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;border-radius:10px;padding:8px 11px;font-size:11.5px;font-weight:600;line-height:1.35;margin:10px 0 2px}
+  .lbcap.live{background:#fbf4e6;color:#9a6b00}
+  .lbcap.final{background:#eafaf0;color:var(--good);font-weight:700}
 
   /* línea cuadra en cero + disclosure dorado */
   .zeroline{display:flex;align-items:center;justify-content:center;gap:7px;color:var(--fairway);font-weight:600;font-size:12.5px;margin:14px 0}
@@ -1006,6 +1025,13 @@ const App = (() => {
     txt.textContent = cur ? cur.label : 'Crear día';
   }
 
+  // ---- Estado del día: en vivo (provisional) vs final ----
+  function dayThru(d,pid){ const order=playOrder(d), sc=ensureScore(d,pid); return order.reduce((n,h)=>n+(sc.gross[h]?1:0),0); }
+  function dayAnyScores(d){ const order=playOrder(d); return dayPlayers(d).filter(Boolean).some(pid=>{ const sc=ensureScore(d,pid); return order.some(h=>sc.gross[h]); }); }
+  function dayAllFinished(d){ const ids=dayPlayers(d).filter(Boolean); if(!ids.length) return false; const order=playOrder(d); return ids.every(pid=>{ const sc=ensureScore(d,pid); return order.every(h=>sc.gross[h]); }); }
+  // FINAL = todos capturaron sus hoyos, O el día está cerrado (lo que pase primero)
+  function isFinalDay(d){ return !!(d.closed || dayAllFinished(d)); }
+
   // ---- Liquidación ----
   function renderLiq(){
     const box=document.getElementById('liqContent');
@@ -1031,10 +1057,12 @@ const App = (() => {
     const fmtP=n=> n>0?'+'+n.toLocaleString('es-MX') : n<0?'−'+Math.abs(n).toLocaleString('es-MX') : '0';
     const clsP=n=> n>0?'pos':n<0?'neg':'zero';
     let html=seg+valBanner;
+    const fin=isFinalDay(d), hasScores=dayAnyScores(d);
+    const statusTag = fin ? `<span class="pgfinal">FINAL</span>` : `<span class="pglive">EN VIVO</span>`;
 
-    // ---- Podio (top 3) ----
-    if(res.rows.length>=3){
-      html+=`<div class="podium"><div class="pod-tit">El podio del día</div><div class="pod-row">`;
+    // ---- Podio (top 3) — oculto si aún no hay scores ----
+    if(hasScores && res.rows.length>=3){
+      html+=`<div class="podium"><div class="pod-tit">El podio del día · ${statusTag}</div><div class="pod-row">`;
       [1,0,2].forEach(idx=>{ const r=res.rows[idx]; const first=idx===0;
         html+=`<div class="pod-col ${first?'first':''}">
           ${first?`<div class="pod-crown"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b98a2e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l4 3.2L12 5l4.5 6.7 4-3.2-1.6 9.3H5.1Z"/><path d="M5.5 20.5h13"/></svg></div>`:''}
@@ -1051,15 +1079,20 @@ const App = (() => {
     html+=`<div class="lb">
       <div class="lb-head"><div class="c1">POS</div><div class="c2">JUGADOR</div><div class="c3">PESOS</div><div class="c4">RAYAS</div></div>
       <div class="lb-sub">HOY · ${courseOf(d).name.toUpperCase()} · ${holesLabel(d).toUpperCase()} · RAYA $${state.rayaValue}</div>`;
-    res.rows.forEach((r,i)=>{ const p=player(r.id);
+    const nHoles=playOrder(d).length;
+    res.rows.forEach((r,i)=>{ const p=player(r.id); const th=dayThru(d,r.id);
+      const thru = fin ? '' : (th>=nHoles ? ' <span class="thru done">✓ terminó</span>' : ` <span class="thru">thru ${th}</span>`);
       html+=`<div class="lb-row" onclick="App.openBet('${r.id}')">
         <div class="pos">${i+1}</div>
-        <div class="nm">${pname(r.id)}${i===0?' <span class="star">★</span>':''}${p&&p.guest?' <span style="font-size:10px;color:var(--muted-2)">·inv</span>':''}</div>
+        <div class="nm">${pname(r.id)}${i===0?' <span class="star">★</span>':''}${p&&p.guest?' <span style="font-size:10px;color:var(--muted-2)">·inv</span>':''}${thru}</div>
         <div class="pesos ${clsP(r.pesos)}">${fmtP(r.pesos)}</div>
         <div class="rayas">${r.total>0?'+':r.total<0?'−':''}${Math.abs(r.total)||0}</div>
       </div>`;
     });
     html+=`</div>`;
+    html+= fin
+      ? `<div class="lbcap final">✓ Resultado FINAL · posiciones firmes</div>`
+      : `<div class="lbcap live">⏳ Provisional · cada quien va en distinto hoyo (thru). Las posiciones se fijan cuando todos terminen o al cerrar.</div>`;
 
     html+= res.sum===0
       ? `<div class="zeroline"><span class="zchk">✓</span>Cuadra en cero${d.closed?'':' · listo para cerrar'}</div>`
@@ -1105,12 +1138,14 @@ const App = (() => {
     let cnt = n>=20?8:Math.max(1,Math.round(n*0.4));
     return Math.round(pool.slice(0,cnt).reduce((a,b)=>a+b,0)/cnt);
   }
+  // rayas netas de un jugador ese día contando SOLO rivales internos (invitados no acumulan)
+  function internalRayas(res,pid){ if(!res||!res.pm) return 0; const row=res.pm[pid]||{}; let s=0; Object.keys(row).forEach(o=>{ const op=player(o); if(op&&!op.guest) s+=row[o]; }); return s; }
   function renderSeason(){
     const totals={}, st={};
     state.players.forEach(p=>{ totals[p.id]=0; st[p.id]={rounds:0,gross:0,putts:0,prounds:0,bird:0,eag:0,diffs:[]}; });
     let nDays=0;
     state.days.forEach(d=>{
-      const res=computeDay(d); if(res){ nDays++; res.rows.forEach(r=>{ if(totals[r.id]==null)totals[r.id]=0; totals[r.id]+=r.pesos; }); }
+      const res=computeDay(d); if(res){ nDays++; res.rows.forEach(r=>{ if(totals[r.id]==null)totals[r.id]=0; totals[r.id]+=internalRayas(res,r.id)*state.rayaValue; }); }
       dayPlayers(d).forEach(pid=>{
         if(!st[pid]) return;
         const sc=ensureScore(d,pid); const done=sc.gross.filter(x=>x>0).length;
@@ -1122,7 +1157,7 @@ const App = (() => {
         }
       });
     });
-    const rows=state.players.map(p=>({id:p.id,name:p.name,guest:p.guest,pesos:totals[p.id]||0,s:st[p.id]}))
+    const rows=state.players.filter(p=>!p.guest).map(p=>({id:p.id,name:p.name,guest:p.guest,pesos:totals[p.id]||0,s:st[p.id]}))
       .filter(r=>r.s.rounds>0 || r.pesos!==0)
       .sort((a,b)=>b.pesos-a.pesos);
     if(rows.length===0) return emptyState('📊','Aún no hay temporada','Cierra tu primer viernes y aquí se acumula el saldo, las estadísticas y el HCP interno.','App.setLiqTab(\'hoy\')','Ver el día');
@@ -1226,20 +1261,24 @@ const App = (() => {
   }
 
   function seasonStats(){
-    const ids=state.players.map(p=>p.id);
-    const A={}; ids.forEach(id=>A[id]={id,name:pname(id),pesos:0,birdies:0,eagles:0,aces:0,oyesWon:0,calacas:0,sandies:0,castigos:0,castById:{},days:0,fridayStreak:0,_run:0,bestDay:null,worstDay:null});
+    const ids=state.players.filter(p=>!p.guest).map(p=>p.id);   // invitados fuera de los trofeos de temporada
+    const A={}; ids.forEach(id=>A[id]={id,name:pname(id),pesos:0,birdies:0,eagles:0,aces:0,oyesWon:0,calacas:0,sandies:0,castigos:0,castById:{},days:0,fridayStreak:0,_run:0,cancels:0,noshows:0,bestDay:null,worstDay:null});
     const PM={}; const chrono=[...state.days].reverse();
     chrono.forEach(d=>{ const st=dayStats(d);
+      (d.cancels||[]).forEach(cc=>{ const a=A[cc.pid]; if(!a) return; if(cc.type==='noshow')a.noshows++; else a.cancels++; });
       st.ids.forEach(id=>{ if(!A[id]) return; const s=st.S[id]; if(s.played===0) return; const a=A[id];
-        a.pesos+=s.pesos;a.birdies+=s.birdies;a.eagles+=s.eagles;a.aces+=s.aces;a.oyesWon+=s.oyesWon;a.calacas+=s.calacas;a.sandies+=s.sandies;a.castigos+=s.castigos;a.days++;
+        // saldo de temporada: SOLO vs internos (lo jugado vs invitados no se acumula)
+        const pmRow=(st.res.pm||{})[id]||{}; let inet=0; Object.keys(pmRow).forEach(o=>{ const op=player(o); if(op && !op.guest) inet+=pmRow[o]; });
+        const ipesos=inet*state.rayaValue;
+        a.pesos+=ipesos;a.birdies+=s.birdies;a.eagles+=s.eagles;a.aces+=s.aces;a.oyesWon+=s.oyesWon;a.calacas+=s.calacas;a.sandies+=s.sandies;a.castigos+=s.castigos;a.days++;
         Object.keys(s.castById||{}).forEach(k=>a.castById[k]=(a.castById[k]||0)+s.castById[k]);
-        if(a.bestDay===null||s.pesos>a.bestDay)a.bestDay=s.pesos; if(a.worstDay===null||s.pesos<a.worstDay)a.worstDay=s.pesos;
-        a._run=s.pesos>0?a._run+1:0; if(a._run>a.fridayStreak)a.fridayStreak=a._run;
+        if(a.bestDay===null||ipesos>a.bestDay)a.bestDay=ipesos; if(a.worstDay===null||ipesos<a.worstDay)a.worstDay=ipesos;
+        a._run=inet>0?a._run+1:0; if(a._run>a.fridayStreak)a.fridayStreak=a._run;
       });
       const pm=st.res.pm||{}; Object.keys(pm).forEach(a=>{ PM[a]=PM[a]||{}; Object.keys(pm[a]).forEach(b=>{ PM[a][b]=(PM[a][b]||0)+pm[a][b]; }); });
     });
-    let nem=null; Object.keys(PM).forEach(a=>Object.keys(PM[a]).forEach(b=>{ const v=PM[a][b]; if(v>0 && (!nem||v>nem.val)) nem={a,b,val:v}; }));
-    return {A, ids: ids.filter(id=>A[id].days>0), nem};
+    let nem=null; Object.keys(PM).forEach(a=>Object.keys(PM[a]).forEach(b=>{ const v=PM[a][b]; if(v>0 && A[a] && A[b] && (!nem||v>nem.val)) nem={a,b,val:v}; }));   // sin invitados
+    return {A, ids: ids.filter(id=>A[id].days>0 || A[id].cancels>0 || A[id].noshows>0), nem};
   }
 
   function hcard(emoji,title,name,val,cls){
@@ -1258,8 +1297,12 @@ const App = (() => {
     return `<div class="hgrid">${hl.map(o=>hcard(o.e,o.t,o.n,o.v,o.c)).join('')}</div>`;
   }
 
-  function dayCarrilla(st){ const {S,ids}=st; const L=[];
-    const play=ids.map(id=>S[id]).filter(s=>s.played>0); if(!play.length) return L;
+  function dayCarrilla(st){ const {S,ids}=st; const L=[]; const dC=curDay();
+    // carrilla por cancelar / no llegar (mal visto en el golf una vez agendada la salida)
+    (dC&&dC.cancels||[]).forEach(cc=>{ const nm=pname(cc.pid);
+      if(cc.type==='noshow') L.push(_pick([`👻 ${nm} NO LLEGÓ a la salida — fantasma del viernes`,`${nm} dejó plantado al grupo 👻 mínimo avisa`]));
+      else L.push(_pick([`🐔 ${nm} canceló a última hora — gallina`,`${nm} se rajó de la salida 🐔 el grupo no olvida`])); });
+    const play=ids.map(id=>S[id]).filter(s=>s.played>0); if(!play.length) return L.slice(0,7);
     const sorted=[...play].sort((a,b)=>a.pesos-b.pesos); const loser=sorted[0], winner=sorted[sorted.length-1];
     if(winner&&winner.pesos>0) L.push(_pick([`👑 ${winner.name} arrasó con ${_money(winner.pesos)} hoy`,`${winner.name} cobró parejo: ${_money(winner.pesos)} 🤑`]));
     play.filter(s=>s.hotStreak>=3).forEach(s=>L.push(`🔥 ${s.name} se prendió: ${s.hotStreak} hoyos ganados al hilo`));
@@ -1278,6 +1321,8 @@ const App = (() => {
     const ck=topCast(A,ids,'calaca'); if(ck)L.push(`💀 ${ck.name} acumula ${ck.val} calaca${ck.val>1?'s':''} — leyenda del Chevezzzz`);
     state.castigos.forEach(c=>{ if(c.id==='calaca') return; const t=topCast(A,ids,c.id); if(t) L.push(`${c.emoji||'🍺'} ${t.name} es el rey del ${(c.name||'').split(' ')[0]}: ${t.val} en la temporada`); });
     ids.map(id=>A[id]).filter(a=>a.birdies===0&&a.days>=2).forEach(a=>L.push(`${a.name} sigue buscando su primer birdie del año 🐦❓`));
+    const cc=topBy(A,ids,'cancels'); if(cc&&cc.val>=1)L.push(`🐔 ${cc.name} lleva ${cc.val} cancelada${cc.val>1?'s':''} en la temporada — gallina oficial`);
+    const gh=topBy(A,ids,'noshows'); if(gh&&gh.val>=1)L.push(`👻 ${gh.name} ha sido fantasma ${gh.val} ${gh.val>1?'veces':'vez'} — el grupo no olvida`);
     return L.slice(0,7);
   }
 
@@ -1313,6 +1358,8 @@ const App = (() => {
     const worst=ids.map(id=>A[id]).filter(a=>a.worstDay!=null).sort((a,b)=>a.worstDay-b.worstDay)[0]; if(worst&&worst.worstDay<0) push('📉','Peor viernes',worst.name,_money(worst.worstDay),'bad');
     if(worst&&worst.worstDay<0) push('📉','Peor viernes',worst.name,_money(worst.worstDay),'bad');
     state.castigos.forEach(c=>{ const t=topCast(A,ids,c.id); if(t) push(c.emoji||'🍺','Rey del '+((c.name||'castigo').split(' ')[0]),t.name,'×'+t.val,'bad'); });
+    if((x=topBy(A,ids,'cancels'))) push('🐔','Rey de las canceladas',x.name,'×'+x.val,'bad');
+    if((x=topBy(A,ids,'noshows'))) push('👻','Fantasma del viernes',x.name,'×'+x.val,'bad');
     return out;
   }
   function renderHighDay(){
@@ -1354,21 +1401,27 @@ const App = (() => {
   // ---- Carrera (acumulado de todos los viernes) y perfiles ----
   function careerStats(){
     const ids=state.players.map(p=>p.id);
-    const C={}; ids.forEach(id=>C[id]={id,name:pname(id),pesos:0,days:0,won:0,lost:0,leaderDays:0,farolDays:0,
+    const C={}; ids.forEach(id=>C[id]={id,name:pname(id),pesos:0,days:0,won:0,lost:0,leaderDays:0,farolDays:0,cancels:0,noshows:0,
       birdies:0,eagles:0,aces:0,holeouts:0,sandies:0,aquas:0,oyesWon:0,calacas:0,zopilotes:0,castigos:0,castById:{},
       bestHot:0,bestCold:0,bestBirdieStreak:0,bestDay:null,worstDay:null});
     const chrono=[...state.days].reverse();
-    chrono.forEach(d=>{ const st=dayStats(d); const played=st.ids.filter(id=>st.S[id].played>0); if(!played.length) return;
-      const ranked=played.map(id=>st.S[id]).sort((a,b)=>b.pesos-a.pesos); const leader=ranked[0], farol=ranked[ranked.length-1];
-      played.forEach(id=>{ const s=st.S[id], c=C[id]; if(!c)return;
-        c.pesos+=s.pesos; c.days++; if(s.pesos>0)c.won++; else if(s.pesos<0)c.lost++;
+    chrono.forEach(d=>{
+      (d.cancels||[]).forEach(cc=>{ const c=C[cc.pid]; if(!c) return; if(cc.type==='noshow')c.noshows++; else c.cancels++; });
+      const st=dayStats(d); const played=st.ids.filter(id=>st.S[id].played>0); if(!played.length) return;
+      // neto SOLO vs internos (lo jugado vs invitados no acumula); leader/farol solo entre internos
+      const pm=st.res.pm||{}; const inet={};
+      played.forEach(id=>{ let s2=0; const row=pm[id]||{}; Object.keys(row).forEach(o=>{ const op=player(o); if(op && !op.guest) s2+=row[o]; }); inet[id]=s2; });
+      const internals=played.filter(id=>{ const p=player(id); return p && !p.guest; });
+      const rankedInt=[...internals].sort((a,b)=>inet[b]-inet[a]); const leader=rankedInt[0], farol=rankedInt[rankedInt.length-1];
+      played.forEach(id=>{ const s=st.S[id], c=C[id]; if(!c)return; const ipesos=inet[id]*state.rayaValue;
+        c.pesos+=ipesos; c.days++; if(inet[id]>0)c.won++; else if(inet[id]<0)c.lost++;
         c.birdies+=s.birdies;c.eagles+=s.eagles;c.aces+=s.aces;c.holeouts+=s.holeouts;c.sandies+=s.sandies;c.aquas+=s.aquas;c.oyesWon+=s.oyesWon;c.calacas+=s.calacas;c.zopilotes+=s.zopilotes;c.castigos+=s.castigos;
         Object.keys(s.castById||{}).forEach(k=>c.castById[k]=(c.castById[k]||0)+s.castById[k]);
         c.bestHot=Math.max(c.bestHot,s.hotStreak); c.bestCold=Math.max(c.bestCold,s.coldStreak); c.bestBirdieStreak=Math.max(c.bestBirdieStreak,s.birdieStreak);
-        if(c.bestDay===null||s.pesos>c.bestDay)c.bestDay=s.pesos; if(c.worstDay===null||s.pesos<c.worstDay)c.worstDay=s.pesos;
+        if(c.bestDay===null||ipesos>c.bestDay)c.bestDay=ipesos; if(c.worstDay===null||ipesos<c.worstDay)c.worstDay=ipesos;
       });
-      if(leader&&leader.pesos>0)C[leader.id].leaderDays++;
-      if(farol&&farol.pesos<0)C[farol.id].farolDays++;
+      if(leader&&inet[leader]>0)C[leader].leaderDays++;
+      if(farol&&inet[farol]<0)C[farol].farolDays++;
     });
     return {C, ids: ids.filter(id=>C[id].days>0)};
   }
@@ -1392,6 +1445,8 @@ const App = (() => {
       {emoji:'💸',name:'Cajero del viernes',val:c.farolDays,good:false,lv:[2,5,10]},
       {emoji:'🧊',name:'Racha fría',val:c.bestCold,good:false,suffix:' h',lv:[3,5,7]},
       {emoji:'📉',name:'Viernes perdidos',val:c.lost,good:false,lv:[3,8,15]},
+      {emoji:'🐔',name:'Canceladas',val:c.cancels||0,good:false,lv:[1,3,6]},
+      {emoji:'👻',name:'No llegó',val:c.noshows||0,good:false,lv:[1,2,4]},
     ];
     return [...good, ...cast, ...bad];
   }
@@ -1399,17 +1454,20 @@ const App = (() => {
   const LVL=['','🥉','🥈','🥇']; // 0=sin medalla(conseguido), 1..3 bronce/plata/oro
   function renderHighPlayers(){
     const cs=careerStats();
-    const list=state.players.slice().sort((a,b)=>((cs.C[b.id]||{}).pesos||0)-((cs.C[a.id]||{}).pesos||0));
-    if(!list.length) return emptyState('🙂','Sin jugadores','Agrega jugadores en Ajustes para ver sus perfiles.');
-    let h='<div class="plist">';
-    list.forEach(p=>{ const c=cs.C[p.id]; const has=!!c; const pe=c?c.pesos:0;
+    const sorted=state.players.slice().sort((a,b)=>((cs.C[b.id]||{}).pesos||0)-((cs.C[a.id]||{}).pesos||0));
+    if(!sorted.length) return emptyState('🙂','Sin jugadores','Agrega jugadores en Ajustes para ver sus perfiles.');
+    const row=p=>{ const c=cs.C[p.id]; const has=!!c; const pe=c?c.pesos:0;
       const col=pe>0?'var(--good)':pe<0?'var(--clay)':'var(--ink)';
       const tcount=has?badgesFor(c).filter(b=>b.good&&b.val>0).length:0;
-      h+=`<div class="prow" onclick="App.openProfile('${p.id}')">
+      return `<div class="prow" onclick="App.openProfile('${p.id}')">
         <div class="prof-av sm">${(pname(p.id)[0]||'?').toUpperCase()}</div>
         <div style="flex:1;min-width:0"><b>${pname(p.id)}</b><div class="hint">${has?c.days+' viernes · 🏆 '+tcount+' trofeos':'sin jugar aún'}</div></div>
-        <div style="text-align:right"><div style="font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:16px;color:${col}">${_money(pe)}</div><div class="hint">perfil ›</div></div></div>`; });
-    h+='</div>';
+        <div style="text-align:right"><div style="font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:16px;color:${col}">${_money(pe)}</div><div class="hint">perfil ›</div></div></div>`; };
+    const regs=sorted.filter(p=>!p.guest), guests=sorted.filter(p=>p.guest);
+    let h='<div class="plist">'+regs.map(row).join('')+'</div>';
+    if(guests.length){
+      h+=`<details class="card disclosure" style="margin-top:10px"><summary>Invitados (${guests.length}) →</summary><div class="plist" style="margin-top:8px">${guests.map(row).join('')}</div></details>`;
+    }
     return h;
   }
   function openProfile(pid){
@@ -1479,10 +1537,11 @@ const App = (() => {
     const allocA=allocate(received(cmpA,cmpB),d), allocB=allocate(received(cmpB,cmpA),d);
     const sameGroup=d.salidas.some(g=>(g||[]).includes(cmpA)&&(g||[]).includes(cmpB));
 
+    const idsAlpha=[...ids].sort((a,b)=>pname(a).localeCompare(pname(b)));
     let html=`<div class="card"><div class="cmpsel">
-      <select onchange="App.setCmp('a',this.value)">${ids.map(id=>`<option value="${id}" ${id===cmpA?'selected':''}>${pname(id)}</option>`).join('')}</select>
+      <select onchange="App.setCmp('a',this.value)">${idsAlpha.map(id=>`<option value="${id}" ${id===cmpA?'selected':''}>${pname(id)}</option>`).join('')}</select>
       <span class="vs">vs</span>
-      <select onchange="App.setCmp('b',this.value)">${ids.map(id=>`<option value="${id}" ${id===cmpB?'selected':''}>${pname(id)}</option>`).join('')}</select>
+      <select onchange="App.setCmp('b',this.value)">${idsAlpha.map(id=>`<option value="${id}" ${id===cmpB?'selected':''}>${pname(id)}</option>`).join('')}</select>
     </div></div>`;
 
     const hemo=(pid,i)=>{ const sc=ensureScore(d,pid); const ids2=new Set([...(sc.gross[i]?autoUnits(sc.gross[i],i,sc.putts[i],holesOf(d)):[]),...validManual(sc,i,holesOf(d))]);
@@ -1517,8 +1576,8 @@ const App = (() => {
       const da=allocA[i]?'-'+allocA[i]:'', db=allocB[i]?'-'+allocB[i]:'';
       const x2 = dbl2 && isSecond(d,i);
       html+=`<tr class="${x2?'x2row':''}"><td>${h.n}${x2?' <span class="x2">×2</span>':''}</td><td class="par">${h.par}</td>
-        <td>${ga||'·'}<sup>${da}</sup> <span class="ue">${hemo(cmpA,i)}</span></td>
-        <td>${gb||'·'}<sup>${db}</sup> <span class="ue">${hemo(cmpB,i)}</span></td>
+        <td>${gsymHtml(ga,h.par)}<sup>${da}</sup> <span class="ue">${hemo(cmpA,i)}</span></td>
+        <td>${gsymHtml(gb,h.par)}<sup>${db}</sup> <span class="ue">${hemo(cmpB,i)}</span></td>
         <td class="rk ${cls}">${mk}</td>${acumCell(running)}</tr>`;
       if(!nine && k===8){ running+=medalContrib(ms.first); html+=segRow('OUT', ord.slice(0,9), running); }
     });
@@ -1550,15 +1609,15 @@ const App = (() => {
       <div class="cr2" style="border:none;margin-top:4px"><b>Neto ${nA}</b>
         <b style="color:${col};font-size:15px">${net>0?'+':''}${net} ray · ${net>0?'+':''}$${pesos.toLocaleString('es-MX')}</b></div></div>`;
 
-    const cur=signedV(cmpA,cmpB);
+    const cur=signedV(cmpA,cmpB);   // + = ${nA} da (rojo) · − = le dan a ${nA} (verde)
     const desc = cur>0?`${nA} le da ${cur} a ${nB}`:cur<0?`${nB} le da ${-cur} a ${nA}`:'parejos';
     html+=`<div class="card"><b style="font-size:13px">Ajustar ventaja (acordada)</b>
       <div class="hint">Hoy: ${desc}. Si la mueves a mano, queda marcada en el historial.</div>
-      <div class="stepper ${cur>0?'pos':cur<0?'neg':''}" style="margin-top:2px">
+      <div class="stepper ${cur>0?'neg':cur<0?'pos':''}" style="margin-top:2px">
         <button onclick="App.adjustVent(-1)">−</button>
         <span class="val">${cur>0?'+':''}${cur}</span>
         <button onclick="App.adjustVent(1)">+</button></div>
-      <div class="hint" style="margin-top:6px">+ = ${nA} da · − = ${nB} da</div></div>`;
+      <div class="hint" style="margin-top:6px"><b style="color:var(--clay)">+</b> = ${nA} da · <b style="color:var(--good)">−</b> = le dan a ${nA}</div></div>`;
     html+=`<div class="exprow"><button class="expbtn" onclick="App.exportCompare()">📸 Exportar comparativa</button></div>`;
     return html;
   }
@@ -1624,7 +1683,7 @@ const App = (() => {
     let html=`<details class="card"><summary>Doblar · 2ª vuelta</summary><div style="margin-top:8px">
       <div class="hint">Al hacer el turn, el que va perdiendo dobla la 2ª vuelta contra quien le gana. Multiplica ×2 todo lo de los segundos 9 entre esos dos.</div>
       <label class="fl">Jugador</label>
-      <select class="txt" onchange="App.setDblPlayer(this.value)">${ids.map(id=>`<option value="${id}" ${id===me?'selected':''}>${player(id).name}</option>`).join('')}</select>`;
+      <select class="txt" onchange="App.setDblPlayer(this.value)">${[...ids].sort((a,b)=>pname(a).localeCompare(pname(b))).map(id=>`<option value="${id}" ${id===me?'selected':''}>${player(id).name}</option>`).join('')}</select>`;
     const opps=ids.filter(id=>id!==me).map(id=>({id, fn:h2h(d,me,id).firstNet, ready:firstNineDone(d,me,id)})).filter(o=>o.ready && o.fn<0);
     html+=`<div style="margin-top:10px;font-size:12px;color:var(--muted)">Te van ganando al turn (1ª vuelta):</div>`;
     if(!opps.length) html+=`<div class="hint">Nadie todavía (o aún no terminan los 9 de la 1ª vuelta).</div>`;
@@ -1936,15 +1995,25 @@ const App = (() => {
     html+=`<div class="card"><div class="row" style="justify-content:space-between"><h3>¿Quién juega hoy?</h3>
       <span class="hint" style="margin:0">${d.playing.length} convocados</span></div>
       <div class="hint">Toca para convocar. Luego dale Sortear.</div><div class="assign">`;
-    const visible=[...state.players].filter(p=>dayShowAll||p.fav||d.playing.includes(p.id))
+    // chips rápidos: favoritos + cualquiera ya convocado (incluye invitados convocados, con su tag)
+    const chips=state.players.filter(p=>p.fav||d.playing.includes(p.id))
       .sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||a.name.localeCompare(b.name));
-    visible.forEach(p=>{
+    chips.forEach(p=>{
       const on=d.playing.includes(p.id);
       html+=`<button class="chip ${on?'on':''}" onclick="App.togglePlaying('${p.id}')">${p.fav?'⭐ ':''}${pname(p.id)}${p.guest?' <small>inv</small>':''}</button>`;
     });
     html+=`</div>`;
-    const others=state.players.filter(p=>!p.fav && !d.playing.includes(p.id)).length;
-    if(dayShowAll || others>0) html+=`<button class="seemore" onclick="App.toggleDayAll()">${dayShowAll?'▴ Solo favoritos':'▾ Ver todos ('+others+')'}</button>`;
+    // "Ver todos": no-favoritos (regulares, sin invitados) que aún no juegan → como LISTA abajo
+    const others=state.players.filter(p=>!p.fav && !p.guest && !d.playing.includes(p.id))
+      .sort((a,b)=>a.name.localeCompare(b.name));
+    if(others.length){
+      html+=`<button class="seemore" onclick="App.toggleDayAll()">${dayShowAll?'▴ Ocultar otros':'▾ Ver todos ('+others.length+')'}</button>`;
+      if(dayShowAll){
+        html+=`<div class="convolist">`;
+        others.forEach(p=>{ html+=`<button class="convorow" onclick="App.togglePlaying('${p.id}')"><span class="cn">${pname(p.id)}</span><span class="cadd">+ convocar</span></button>`; });
+        html+=`</div>`;
+      }
+    }
     html+=`</div>`;
 
     // 2. sorteo + grupos
@@ -1990,6 +2059,21 @@ const App = (() => {
     }
     html+=`</div>`;
 
+    // evidencia de cambios de salida (post-sorteo)
+    if((d.moves||[]).length){
+      html+=`<details class="card disclosure"><summary>Cambios de salida (${d.moves.length}) →</summary><div style="margin-top:8px">`;
+      d.moves.forEach(m=>{ const t=new Date(m.ts).toLocaleString('es-MX',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+        html+=`<div class="dlog"><span><b>${pname(m.pid)}</b> G${m.from}→G${m.to} · <span style="color:var(--muted)">${m.motivo}</span></span><span class="t">${t}</span></div>`; });
+      html+=`</div></details>`;
+    }
+    // evidencia de cancelaciones / no-shows
+    if((d.cancels||[]).length){
+      html+=`<details class="card disclosure"><summary>Cancelaciones (${d.cancels.length}) →</summary><div style="margin-top:8px">`;
+      d.cancels.forEach(cc=>{ const t=new Date(cc.ts).toLocaleString('es-MX',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+        html+=`<div class="dlog quitar"><span>${cc.type==='noshow'?'👻 No llegó':'🐔 Canceló'} · <b>${pname(cc.pid)}</b></span><span class="t">${t}</span></div>`; });
+      html+=`</div></details>`;
+    }
+
     // 3. invitados
     html+=`<div class="card"><h3>Invitados</h3>
       <div class="hint">Agrega un invitado y captura sus ventajas contra todos los del día.</div>
@@ -2001,30 +2085,71 @@ const App = (() => {
   function togglePlaying(pid){
     const d=curDay(); d.playing=d.playing||[];
     const k=d.playing.indexOf(pid);
-    if(k>=0){ d.playing.splice(k,1);
-      [0,1].forEach(s=>{ const a=d.salidas[s]||[]; const j=a.indexOf(pid); if(j>=0)a.splice(j,1); });
+    if(k>=0){
+      // si ya está sorteado (en un grupo) → cancela/no-show con carrilla
+      if((d.salidas||[]).some(s=>(s||[]).includes(pid))){ cancelModal(pid); return; }
+      d.playing.splice(k,1);
     } else d.playing.push(pid);
     save(); renderDay();
   }
+  function cancelModal(pid){
+    modal(`<h3>Quitar a ${pname(pid)}</h3>
+      <div class="hint" style="margin-bottom:12px">Ya estaba en la salida 😬. En el golf, cancelar o no llegar después de agendar es <b>mal visto</b>… así que se va directo a la carrilla.</div>
+      <div class="row" style="gap:8px">
+        <button class="btn clay" style="flex:1" onclick="App.cancelPlayer('${pid}','cancel')">🐔 Canceló</button>
+        <button class="btn clay outline" style="flex:1" onclick="App.cancelPlayer('${pid}','noshow')">👻 No llegó</button></div>
+      <button class="btn ghost block" style="margin-top:10px" onclick="App.closeModal()">Mejor no, déjalo</button>`);
+  }
+  function cancelPlayer(pid,type){
+    const d=curDay();
+    const k=(d.playing||[]).indexOf(pid); if(k>=0) d.playing.splice(k,1);
+    [0,1].forEach(s=>{ const a=d.salidas[s]||[]; const j=a.indexOf(pid); if(j>=0)a.splice(j,1); });
+    d.cancels=d.cancels||[]; d.cancels.unshift({pid,type,ts:Date.now()});
+    save(); closeModal(); renderDay();
+    toast(type==='noshow'?'👻 No llegó — a la carrilla':'🐔 Canceló — a la carrilla');
+  }
   function moveGroup(pid,g){
     const d=curDay();
+    const inGroup=(d.salidas||[]).some(s=>(s||[]).includes(pid));
+    if(!inGroup){ doMoveGroup(pid,g,''); return; }   // colocación inicial (sin grupo) → directo, sin candado
+    // ya sorteado: candado → confirmar + motivo (queda registrado)
+    modal(`<h3>Mover jugador</h3>
+      <div class="hint" style="margin-bottom:10px">Vas a mover a <b>${pname(pid)}</b> a <b>Grupo ${g+1}</b>. Los grupos ya están sorteados, así que el cambio <b>quedará registrado</b>.</div>
+      <label class="fl">Motivo (ej. horario)</label>
+      <input id="mv_motivo" class="txt" placeholder="por qué se mueve" autofocus>
+      <div class="row" style="gap:8px;margin-top:14px">
+        <button class="btn ghost" style="flex:1" onclick="App.closeModal()">Cancelar</button>
+        <button class="btn" style="flex:1" onclick="App.confirmMove('${pid}',${g})">Mover y registrar</button></div>`);
+  }
+  function confirmMove(pid,g){
+    const el=document.getElementById('mv_motivo'); const motivo=el?el.value.trim():'';
+    closeModal(); doMoveGroup(pid,g,motivo);
+  }
+  function doMoveGroup(pid,g,motivo){
+    const d=curDay();
+    const fromG=d.salidas[0].includes(pid)?0:(d.salidas[1].includes(pid)?1:null);
     [0,1].forEach(s=>{ const a=d.salidas[s]||[]; const k=a.indexOf(pid); if(k>=0)a.splice(k,1); });
     d.salidas[g]=d.salidas[g]||[];
-    if(d.salidas[g].length>=6){ toast('Grupo lleno (6)'); save(); renderDay(); return; }
+    if(d.salidas[g].length>=6){ toast('Grupo lleno (6)'); if(fromG!=null) d.salidas[fromG].push(pid); save(); renderDay(); return; }
     d.salidas[g].push(pid);
+    if(fromG!=null && fromG!==g){ d.moves=d.moves||[]; d.moves.unshift({ts:Date.now(), pid, from:fromG+1, to:g+1, motivo:motivo||'—'}); }
     save(); renderDay();
   }
   function sorteo(){
     const d=curDay(); const pool=[...d.playing];
     if(pool.length>12) toast('Más de 12: ajusta a mano');
     for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
-    const groups=pool.length<=6?1:2;
     d.salidas=[[],[]];
-    pool.forEach((id,i)=>{ d.salidas[i%groups].push(id); });
+    if(pool.length<=6){ d.salidas[0]=pool; }
+    else { const g1=Math.floor(pool.length/2); d.salidas[0]=pool.slice(0,g1); d.salidas[1]=pool.slice(g1); }  // Grupo 1 = el más chico (sale adelante, no frena al grande)
     save(); renderDay(); toast('Grupos sorteados');
   }
 
   // ---- Tarjeta por grupo (cómo vamos) ----
+  // Simbología de golf: círculo=birdie, doble círculo=eagle, cuadrado=bogey, doble cuadrado=doble bogey+
+  function gsymHtml(g,par){ if(!g) return '·'; const df=g-par;
+    const sym = df<=-2?'eagle':df===-1?'birdie':df===0?'par':df===1?'bogey':'dbogey';
+    return `<span class="gsym ${sym}">${g}</span>`; }
   function renderCard(d, onlyGroup, hlHole){
     const res=computeDay(d); const holes=holesOf(d); const ord=playOrder(d); const nine=isNine(d);
     const front=ord.slice(0,9), back=ord.slice(9,18);
@@ -2049,9 +2174,8 @@ const App = (() => {
         const outG=front.reduce((a,i)=>a+(sc.gross[i]||0),0), inG=back.reduce((a,i)=>a+(sc.gross[i]||0),0);
         const r=res?res.rows.find(x=>x.id===id):null, rr=r?r.total:0;
         html+=`<tr><th class="pn">${p?pname(p.id):'—'}</th>`;
-        ord.forEach((i,k)=>{ const h=holes[i], g=sc.gross[i]; let c=i===hlHole?'hl ':'';
-          if(g>0){const df=g-h.par; c+=df<=-2?'eag':df===-1?'bir':df===0?'par':df===1?'bog':'dbl';}
-          html+=`<td class="${c}">${g||'·'}</td>`;
+        ord.forEach((i,k)=>{ const h=holes[i], g=sc.gross[i];
+          html+=`<td class="${i===hlHole?'hl':''}">${gsymHtml(g,h.par)}</td>`;
           if(!nine&&k===8) html+=`<td class="tt sub"><b>${outG||'·'}</b></td>`; });
         if(!nine) html+=`<td class="tt sub"><b>${inG||'·'}</b></td>`;
         const rc=rr>0?'pos':rr<0?'neg':'';
@@ -2394,56 +2518,38 @@ const App = (() => {
   }
 
   // ---- Ventajas ----
-  let ventFocus=null, ventTab='hcp';
+  let ventFocus=null;
   function renderVent(){
     const box=document.getElementById('ventContent');
     if(state.players.length<2){ box.innerHTML=emptyState('⚖️','Faltan jugadores','Agrega al menos dos en Ajustes.','App.go(\'cfg\')','Ir a Ajustes'); return; }
     if(!ventFocus||!player(ventFocus)) ventFocus=state.players[0].id;
-    const seg=`<div class="seg2">
-      <button class="${ventTab!=='h2h'?'on':''}" onclick="App.setVentTab('hcp')">Hándicaps</button>
-      <button class="${ventTab==='h2h'?'on':''}" onclick="App.setVentTab('h2h')">Cara a cara</button></div>`;
-    if(ventTab==='h2h'){ box.innerHTML=seg+renderVentH2H(); return; }
+    const sorted=[...state.players].sort((a,b)=>a.name.localeCompare(b.name));   // alfabético
 
     let html=`<div class="card"><div class="row" style="justify-content:space-between">
         <label class="fl" style="margin:0">Ver ventajas de</label>
         <button class="btn outline sm" onclick="App.historyModal()">Historial / sliding</button></div>
       <select class="txt" style="margin-top:6px" onchange="App.setVentFocus(this.value)">`;
-    state.players.forEach(p=>html+=`<option value="${p.id}" ${p.id===ventFocus?'selected':''}>${p.name}${p.guest?' (inv)':''}</option>`);
+    sorted.forEach(p=>html+=`<option value="${p.id}" ${p.id===ventFocus?'selected':''}>${p.name}${p.guest?' (inv)':''}</option>`);
     html+=`</select></div>`;
 
     const me=player(ventFocus);
     html+=`<div class="card"><h3>${me.name} vs…</h3>
-      <div class="hint"><b>+</b> ${pname(me.id)} da ventajas · <b>−</b> se las dan a ${pname(me.id)}.</div>`;
-    state.players.filter(p=>p.id!==ventFocus).forEach(p=>{
-      const v=signedV(ventFocus,p.id);
+      <div class="hint"><b style="color:var(--clay)">+ (rojo)</b> = ${pname(me.id)} <b>da</b> ventaja (juega en su contra) · <b style="color:var(--good)">− (verde)</b> = se la <b>dan</b>.</div>`;
+    sorted.filter(p=>p.id!==ventFocus).forEach(p=>{
+      const v=signedV(ventFocus,p.id);   // + = ${me} da (rojo) · − = le dan a ${me} (verde)
       const desc = v>0?`${pname(me.id)} le da ${v}`:v<0?`le da ${-v} a ${pname(me.id)}`:'parejos';
       html+=`<div class="vrow">
         <div><div class="who">${p.name}${p.guest?' ·inv':''}</div><div class="desc">${desc}</div></div>
-        <div class="stepper ${v>0?'pos':v<0?'neg':''}">
+        <div class="stepper ${v>0?'neg':v<0?'pos':''}">
           <button onclick="App.stepV('${p.id}',-1)">−</button>
           <span class="val">${v>0?'+':''}${v}</span>
           <button onclick="App.stepV('${p.id}',1)">+</button>
         </div></div>`;
     });
     html+=`</div>`;
-    box.innerHTML=seg+html;
-  }
-  // Cara a cara · solo lectura: quién le da N rayas a quién (derivado de signedV)
-  function renderVentH2H(){
-    const d=curDay();
-    const ids = d ? dayPlayers(d).filter(Boolean) : state.players.map(p=>p.id);
-    if(ids.length<2) return emptyState('🤝','Sin parejas','Convoca jugadores en Salidas o agrega en Ajustes.','App.go(\'day\')','Ir a Salidas');
-    let rows='';
-    for(let i=0;i<ids.length;i++) for(let j=0;j<ids.length;j++){ if(i===j) continue;
-      const a=ids[i], b=ids[j], v=signedV(a,b);
-      if(v>0) rows+=`<div class="vrow"><div class="who">${pname(a)} → ${pname(b)}</div><span class="dapill">da ${v}</span></div>`;
-    }
-    if(!rows) rows=`<div class="hint">Todos parejos${d?' hoy':''} — nadie reparte ventaja.</div>`;
-    return `<div class="card"><h3>Cara a cara${d?' · hoy':''}</h3>
-      <div class="hint">Quién le reparte rayas a quién en cada match (con la ventaja acordada).</div>${rows}</div>`;
+    box.innerHTML=html;
   }
   function setVentFocus(id){ ventFocus=id; renderVent(); }
-  function setVentTab(t){ ventTab=t; renderVent(); }
   function openBet(pid){
     const res=compute(); if(!res) return;
     const r=res.rows.find(x=>x.id===pid); if(!r) return;
@@ -2673,6 +2779,7 @@ const App = (() => {
   function addPlayerModal(){
     modal(`<h3>Agregar jugador</h3>
       <label class="fl">Nombre</label><input id="m_name" class="txt" placeholder="Nombre y apellido" autofocus>
+      <label class="fl" style="margin-top:10px">Apodo (opcional)</label><input id="m_apodo" class="txt" placeholder="como le dicen en el 19">
       <button class="btn block" style="margin-top:14px" onclick="App.createPlayer(false)">Agregar</button>`);
   }
   function addGuestModal(){
@@ -2684,7 +2791,8 @@ const App = (() => {
   function createPlayer(guest){
     const name=document.getElementById('m_name').value.trim();
     if(!name){ toast('Pon un nombre'); return; }
-    const p={id:uid(),name,guest:!!guest,fav:!guest}; state.players.push(p);
+    const apEl=document.getElementById('m_apodo'); const apodo=apEl?apEl.value.trim():'';
+    const p={id:uid(),name,apodo,guest:!!guest,fav:!guest}; state.players.push(p);
     if(guest){ const d=curDay(); if(d){ d.playing=d.playing||[]; if(!d.playing.includes(p.id)) d.playing.push(p.id); } }
     save(); closeModal();
     if(guest){ toast('Invitado agregado · ponle ventajas'); go('vent'); ventFocus=p.id; renderVent(); }
@@ -2774,17 +2882,16 @@ const App = (() => {
 
   // ---------- util ----------
   function emptyState(icon,title,desc,action,btn){
-    return `<div class="empty"><div class="big">${icon}</div><h3>${title}</h3><p>${desc}</p>
-      <button class="btn" onclick="${action}">${btn}</button></div>`;
+    return `<div class="empty"><div class="big">${icon}</div><h3>${title}</h3><p>${desc}</p>${(action&&btn)?`<button class="btn" onclick="${action}">${btn}</button>`:''}</div>`;
   }
   function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
   function flashSave(){ const s=document.getElementById('savehint'); if(s){s.classList.add('show'); setTimeout(()=>s.classList.remove('show'),900);} }
 
   async function init(){ try{ if(document.fonts&&document.fonts.load){ document.fonts.load("600 40px Newsreader"); document.fonts.load("700 16px 'Hanken Grotesk'"); } }catch(e){} await load(); if(!state.currentDayId && state.days[0]) state.currentDayId=state.days[0].id; render(); }
   return { init,go,switchDay,daysModal,editDayModal,saveDayEdit,delDay,newDayModal,createDay,
-    toggleAssign:null,togglePlaying,toggleDayAll,moveGroup,sorteo,addGuestModal,
+    toggleAssign:null,togglePlaying,toggleDayAll,cancelPlayer,moveGroup,confirmMove,sorteo,addGuestModal,
     pickScore,score,putt,setOyes,quick,toggleUnit,toggleCast,navHole,gotoPending,gotoPlayerPending,setScoreGroup,setStart,setHoles,setCourse,
-    setVentFocus,setVentTab,stepV,openBet,openH2H,setLiqTab,setScoreTab,setCmp,adjustVent,
+    setVentFocus,stepV,openBet,openH2H,setLiqTab,setScoreTab,setCmp,adjustVent,
     setDblPlayer,toggleDbl,closeDay,historyModal,exportImage,exportHigh,exportProfile,exportSalidas,exportSeasonTable,exportCompare,exportScorecard,toggleSound,
     setRaya,addPlayerModal,createPlayer,editPlayerModal,savePlayer,delPlayer,toggleFav,
     courseModal,setHole,setCfgCourse,addCourse,renameCourse,deleteCourse,unitModal,createUnit,delUnit,castModal,createCast,delCast,toggleCastTipo,
