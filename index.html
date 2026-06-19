@@ -2532,7 +2532,8 @@ const App = (() => {
     const box=document.getElementById('ventContent');
     if(state.players.length<2){ box.innerHTML=emptyState('⚖️','Faltan jugadores','Agrega al menos dos en Ajustes.','App.go(\'cfg\')','Ir a Ajustes'); return; }
     if(!ventFocus||!player(ventFocus)) ventFocus=state.players[0].id;
-    const sorted=[...state.players].sort((a,b)=>a.name.localeCompare(b.name));   // alfabético
+    // regulares primero (alfabético), invitados al final
+    const sorted=[...state.players].sort((a,b)=>(a.guest?1:0)-(b.guest?1:0)||a.name.localeCompare(b.name));
 
     let html=`<div class="card"><div class="row" style="justify-content:space-between">
         <label class="fl" style="margin:0">Ver ventajas de</label>
@@ -2542,20 +2543,24 @@ const App = (() => {
     html+=`</select></div>`;
 
     const me=player(ventFocus);
-    html+=`<div class="card"><h3>${me.name} vs…</h3>
-      <div class="hint"><b style="color:var(--clay)">+ (rojo)</b> = ${pname(me.id)} <b>da</b> ventaja (juega en su contra) · <b style="color:var(--good)">− (verde)</b> = se la <b>dan</b>.</div>`;
-    sorted.filter(p=>p.id!==ventFocus).forEach(p=>{
-      const v=signedV(ventFocus,p.id);   // + = ${me} da (rojo) · − = le dan a ${me} (verde)
+    const vrowH=p=>{ const v=signedV(ventFocus,p.id);   // + = ${me} da (rojo) · − = le dan a ${me} (verde)
       const desc = v>0?`${pname(me.id)} le da ${v}`:v<0?`le da ${-v} a ${pname(me.id)}`:'parejos';
-      html+=`<div class="vrow">
+      return `<div class="vrow">
         <div><div class="who">${p.name}${p.guest?' ·inv':''}</div><div class="desc">${desc}</div></div>
         <div class="stepper ${v>0?'neg':v<0?'pos':''}">
           <button onclick="App.stepV('${p.id}',-1)">−</button>
           <span class="val">${v>0?'+':''}${v}</span>
           <button onclick="App.stepV('${p.id}',1)">+</button>
-        </div></div>`;
-    });
+        </div></div>`; };
+    const opps=sorted.filter(p=>p.id!==ventFocus);
+    const regOpps=opps.filter(p=>!p.guest), guestOpps=opps.filter(p=>p.guest);
+    html+=`<div class="card"><h3>${me.name} vs…</h3>
+      <div class="hint"><b style="color:var(--clay)">+ (rojo)</b> = ${pname(me.id)} <b>da</b> ventaja (juega en su contra) · <b style="color:var(--good)">− (verde)</b> = se la <b>dan</b>.</div>`;
+    regOpps.forEach(p=>html+=vrowH(p));
     html+=`</div>`;
+    if(guestOpps.length){
+      html+=`<details class="card disclosure"><summary>Invitados (${guestOpps.length}) →</summary><div style="margin-top:8px">${guestOpps.map(vrowH).join('')}</div></details>`;
+    }
     box.innerHTML=html;
   }
   function setVentFocus(id){ ventFocus=id; renderVent(); }
