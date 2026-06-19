@@ -136,7 +136,6 @@
   .vrow:last-child{border-bottom:none}
   .vrow .who{font-family:'Newsreader',serif;font-weight:600;font-size:16px;color:var(--fairway)}
   .vrow .desc{font-size:11.5px;color:var(--muted)}
-  .dapill{background:#eafaf0;color:var(--good);border:1px solid #bfe6cf;border-radius:999px;padding:5px 13px;font-size:12.5px;font-weight:800;white-space:nowrap}
 
   /* salida assignment */
   .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
@@ -147,14 +146,8 @@
   .chip.on{background:var(--fairway);color:#fff;border-color:var(--fairway)}
   .chip.s2.on{background:var(--purple);border-color:var(--purple)}
   .chip small{font-size:10px;opacity:.85;font-weight:600}
-  .seemore{margin-top:9px;font-size:12.5px;font-weight:700;color:var(--fairway);background:none;border:none;padding:4px 0;cursor:pointer}
-  .seemore:active{opacity:.6}
-  .convolist{display:flex;flex-direction:column;margin-top:8px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  .convorow{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:11px 13px;background:#fff;border:none;border-bottom:1px solid var(--line-2);text-align:left}
-  .convorow:last-child{border-bottom:none}
-  .convorow:active{background:var(--paper-2)}
-  .convorow .cn{font-family:'Newsreader',serif;font-weight:600;font-size:15px;color:var(--ink)}
-  .convorow .cadd{font-size:12px;font-weight:700;color:var(--fairway);background:var(--paper-2);border-radius:999px;padding:4px 11px;flex:none}
+  .addsel{appearance:none;-webkit-appearance:none;width:100%;margin-top:10px;font-size:14px;font-weight:600;color:var(--fairway);background:#fff;border:1.5px solid var(--fairway);border-radius:12px;padding:11px 32px 11px 14px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%230a6a3a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center}
 
   /* scorecard */
   .scsel{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px}
@@ -631,7 +624,7 @@ const App = (() => {
     days:[],               // {id,date,label,salidas:[[ids],[ids]],scores:{pid:{gross:[..],units:{h:[ids]},cast:{h:[ids]}}}}
     currentDayId:null,
   };
-  let curView='liq', curScorePlayer=null, curScoreSalida=0, liqTab='hoy', scoreTab='cap', highTab='hoy', dayShowAll=false;
+  let curView='liq', curScorePlayer=null, curScoreSalida=0, liqTab='hoy', scoreTab='cap', highTab='hoy';
   let curScoreGroup=0, curHoleNav=0, cmpA=null, cmpB=null, dblPlayer=null, cfgCourseId='campestre';
   let saveTimer=null, dirty=false;
 
@@ -2003,16 +1996,13 @@ const App = (() => {
       html+=`<button class="chip ${on?'on':''}" onclick="App.togglePlaying('${p.id}')">${p.fav?'⭐ ':''}${pname(p.id)}${p.guest?' <small>inv</small>':''}</button>`;
     });
     html+=`</div>`;
-    // "Ver todos": no-favoritos (regulares, sin invitados) que aún no juegan → como LISTA abajo
-    const others=state.players.filter(p=>!p.fav && !p.guest && !d.playing.includes(p.id))
-      .sort((a,b)=>a.name.localeCompare(b.name));
-    if(others.length){
-      html+=`<button class="seemore" onclick="App.toggleDayAll()">${dayShowAll?'▴ Ocultar otros':'▾ Ver todos ('+others.length+')'}</button>`;
-      if(dayShowAll){
-        html+=`<div class="convolist">`;
-        others.forEach(p=>{ html+=`<button class="convorow" onclick="App.togglePlaying('${p.id}')"><span class="cn">${pname(p.id)}</span><span class="cadd">+ convocar</span></button>`; });
-        html+=`</div>`;
-      }
+    // dropdown para convocar a CUALQUIER otro jugador no convocado (regulares e invitados)
+    const notIn=[...state.players].filter(p=>!d.playing.includes(p.id)).sort((a,b)=>a.name.localeCompare(b.name));
+    if(notIn.length){
+      html+=`<select class="addsel" onchange="if(this.value)App.togglePlaying(this.value)">
+        <option value="">＋ Agregar otro jugador…</option>
+        ${notIn.map(p=>`<option value="${p.id}">${p.name}${p.guest?' (inv)':''}</option>`).join('')}
+      </select>`;
     }
     html+=`</div>`;
 
@@ -2081,7 +2071,6 @@ const App = (() => {
     if((d.salidas||[]).some(g=>(g||[]).filter(Boolean).length)) html+=`<div class="exprow"><button class="expbtn" onclick="App.exportSalidas()">📸 Exportar salidas</button></div>`;
     box.innerHTML=html;
   }
-  function toggleDayAll(){ dayShowAll=!dayShowAll; renderDay(); }
   function togglePlaying(pid){
     const d=curDay(); d.playing=d.playing||[];
     const k=d.playing.indexOf(pid);
@@ -2889,7 +2878,7 @@ const App = (() => {
 
   async function init(){ try{ if(document.fonts&&document.fonts.load){ document.fonts.load("600 40px Newsreader"); document.fonts.load("700 16px 'Hanken Grotesk'"); } }catch(e){} await load(); if(!state.currentDayId && state.days[0]) state.currentDayId=state.days[0].id; render(); }
   return { init,go,switchDay,daysModal,editDayModal,saveDayEdit,delDay,newDayModal,createDay,
-    toggleAssign:null,togglePlaying,toggleDayAll,cancelPlayer,moveGroup,confirmMove,sorteo,addGuestModal,
+    toggleAssign:null,togglePlaying,cancelPlayer,moveGroup,confirmMove,sorteo,addGuestModal,
     pickScore,score,putt,setOyes,quick,toggleUnit,toggleCast,navHole,gotoPending,gotoPlayerPending,setScoreGroup,setStart,setHoles,setCourse,
     setVentFocus,stepV,openBet,openH2H,setLiqTab,setScoreTab,setCmp,adjustVent,
     setDblPlayer,toggleDbl,closeDay,historyModal,exportImage,exportHigh,exportProfile,exportSalidas,exportSeasonTable,exportCompare,exportScorecard,toggleSound,
