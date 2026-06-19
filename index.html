@@ -459,6 +459,8 @@
   .modal{background:var(--paper);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);max-height:88vh;overflow:auto;animation:up .25s ease}
   @keyframes up{from{transform:translateY(100%)}to{transform:none}}
   .modal h3{font-family:'Newsreader',serif;font-weight:600;font-size:22px;color:var(--fairway);margin-bottom:10px}
+  .ruleslist{margin:0 0 6px;padding-left:20px;font-size:13px;line-height:1.5;color:var(--ink)}
+  .ruleslist li{margin-bottom:7px}
   .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;opacity:0;transition:.25s;z-index:60;pointer-events:none}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .seglabel{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;font-size:11px;color:var(--muted);font-weight:600;margin:8px 0 2px}
@@ -1255,7 +1257,7 @@ const App = (() => {
 
   function seasonStats(){
     const ids=state.players.filter(p=>!p.guest).map(p=>p.id);   // invitados fuera de los trofeos de temporada
-    const A={}; ids.forEach(id=>A[id]={id,name:pname(id),pesos:0,birdies:0,eagles:0,aces:0,oyesWon:0,calacas:0,sandies:0,castigos:0,castById:{},days:0,fridayStreak:0,_run:0,cancels:0,noshows:0,bestDay:null,worstDay:null});
+    const A={}; ids.forEach(id=>A[id]={id,name:pname(id),pesos:0,birdies:0,eagles:0,aces:0,oyesWon:0,calacas:0,sandies:0,castigos:0,castById:{},days:0,fridayStreak:0,_run:0,cancels:0,noshows:0,lastDate:null,bestDay:null,worstDay:null});
     const PM={}; const chrono=[...state.days].reverse();
     chrono.forEach(d=>{ const st=dayStats(d);
       (d.cancels||[]).forEach(cc=>{ const a=A[cc.pid]; if(!a) return; if(cc.type==='noshow')a.noshows++; else a.cancels++; });
@@ -1267,6 +1269,7 @@ const App = (() => {
         Object.keys(s.castById||{}).forEach(k=>a.castById[k]=(a.castById[k]||0)+s.castById[k]);
         if(a.bestDay===null||ipesos>a.bestDay)a.bestDay=ipesos; if(a.worstDay===null||ipesos<a.worstDay)a.worstDay=ipesos;
         a._run=inet>0?a._run+1:0; if(a._run>a.fridayStreak)a.fridayStreak=a._run;
+        if(d.date && (!a.lastDate || d.date>a.lastDate)) a.lastDate=d.date;
       });
       const pm=st.res.pm||{}; Object.keys(pm).forEach(a=>{ PM[a]=PM[a]||{}; Object.keys(pm[a]).forEach(b=>{ PM[a][b]=(PM[a][b]||0)+pm[a][b]; }); });
     });
@@ -1316,6 +1319,13 @@ const App = (() => {
     ids.map(id=>A[id]).filter(a=>a.birdies===0&&a.days>=2).forEach(a=>L.push(`${a.name} sigue buscando su primer birdie del año 🐦❓`));
     const cc=topBy(A,ids,'cancels'); if(cc&&cc.val>=1)L.push(`🐔 ${cc.name} lleva ${cc.val} cancelada${cc.val>1?'s':''} en la temporada — gallina oficial`);
     const gh=topBy(A,ids,'noshows'); if(gh&&gh.val>=1)L.push(`👻 ${gh.name} ha sido fantasma ${gh.val} ${gh.val>1?'veces':'vez'} — el grupo no olvida`);
+    // inasistencia: >2 meses sin venir (relativo a la última jugada) → advertencia carrilla
+    const ref=state.days[0]&&state.days[0].date;
+    if(ref){ const refT=new Date(ref+'T12:00').getTime();
+      ids.map(id=>A[id]).filter(a=>a.lastDate).forEach(a=>{ const gapDays=Math.round((refT-new Date(a.lastDate+'T12:00').getTime())/86400000);
+        if(gapDays>60){ const meses=Math.floor(gapDays/30); L.push(_pick([`📵 ${a.name} lleva ${meses} meses sin aparecer — ¿lo sacamos del grupo de WhatsApp? 👀`,`👻 ${a.name} no se para por aquí desde hace ${meses} meses… moción para expulsarlo del chat 😤`,`🚪 ${a.name}: ${meses} meses de inasistencia. Ya casi es baja del grupo, eh 😅`])); }
+      });
+    }
     return L.slice(0,7);
   }
 
@@ -2078,7 +2088,17 @@ const App = (() => {
       // si ya está sorteado (en un grupo) → cancela/no-show con carrilla
       if((d.salidas||[]).some(s=>(s||[]).includes(pid))){ cancelModal(pid); return; }
       d.playing.splice(k,1);
-    } else d.playing.push(pid);
+    } else {
+      d.playing.push(pid);
+      // si ya se sorteó, balancear: meter al grupo MÁS CHICO (empate → Grupo 2, para que G1≤G2)
+      if((d.salidas||[]).some(s=>(s||[]).filter(Boolean).length)){
+        const c0=(d.salidas[0]||[]).filter(Boolean).length, c1=(d.salidas[1]||[]).filter(Boolean).length;
+        let target = (c0>0 && c1>0) ? (c0<c1?0:1) : (c0<6?0:1);
+        if((d.salidas[target]||[]).length>=6) target=1-target;
+        d.salidas[target]=d.salidas[target]||[];
+        if(d.salidas[target].length<6) d.salidas[target].push(pid);
+      }
+    }
     save(); renderDay();
   }
   function cancelModal(pid){
@@ -2593,6 +2613,11 @@ const App = (() => {
     // ===================== REGLAS DE LA CASA =====================
     html+=`<div class="cfg-sect">Reglas de la casa</div>`;
 
+    // reglas del grupo (texto completo en modal)
+    html+=`<div class="card"><div class="row" style="justify-content:space-between"><h3>📜 Reglas del grupo</h3>
+      <button class="btn outline sm" onclick="App.rulesModal()">Ver reglas</button></div>
+      <div class="hint">Paloma, pinkys, calaca, oyeses sangrientos, hole-in-one… las reglas oficiales de los viernes.</div></div>`;
+
     // valor de raya
     html+=`<div class="card"><h3>Valor de la raya</h3>
       <div class="row"><span style="font-size:22px;font-weight:700">$</span>
@@ -2869,6 +2894,25 @@ const App = (() => {
     a.download='rayas-campestre-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
   }
 
+  function rulesModal(){
+    modal(`<h3>📜 Reglas del grupo</h3>
+      <div class="hint" style="margin-bottom:10px">Golf de los viernes · 2:20 · Campestre León</div>
+      <ol class="ruleslist">
+        <li><b>Paloma</b> — 🍾 Pomo.</li>
+        <li><b>Pinkys</b> — 🍺 Chevezz.</li>
+        <li><b>Calaca</b> — 🍺 Chevezz.</li>
+        <li><b>Salir de green</b> — 🍺 Chevezz.</li>
+        <li><b>Si mides y no da</b> — 📏 En el green, si la bola está a menos de la longitud de tu putt (antes del grip), es “dada”. Si la mides y no cumple, pagas 🍺 Chevezz. Si la mides después de levantarla, se entiende que la vas a jugar. Si es dada y la putteas y fallas, cuenta el golpe.</li>
+        <li><b>Oyeses</b> — 🩸 son sangrientos.</li>
+        <li><b>Si no llegas a tu tee time</b> — ⏰ tu score en los hoyos no jugados será un golpe más que el jugador con más golpes de cualquier foursome.</li>
+        <li><b>Cobro de bebidas desde el hoyo 16</b> — 🍻 una penalización del 16 en adelante se cobra en el 19 (clubhouse).</li>
+        <li><b>Hole in one</b> — 🎯 cada miembro del chat aporta 💵 150 USD y tú organizas la 🍽️ comida.</li>
+        <li><b>Caddie</b> — 🤫 no opinan ni intervienen en las jugadas de nadie.</li>
+      </ol>
+      <div class="hint">🍺 <b>Chevezz</b> = una bebida sencilla o de valor similar.</div>
+      <button class="btn block" style="margin-top:12px" onclick="App.closeModal()">Cerrar</button>`);
+  }
+
   // ---------- util ----------
   function emptyState(icon,title,desc,action,btn){
     return `<div class="empty"><div class="big">${icon}</div><h3>${title}</h3><p>${desc}</p>${(action&&btn)?`<button class="btn" onclick="${action}">${btn}</button>`:''}</div>`;
@@ -2884,7 +2928,7 @@ const App = (() => {
     setDblPlayer,toggleDbl,closeDay,historyModal,exportImage,exportHigh,exportProfile,exportSalidas,exportSeasonTable,exportCompare,exportScorecard,toggleSound,
     setRaya,addPlayerModal,createPlayer,editPlayerModal,savePlayer,delPlayer,toggleFav,
     courseModal,setHole,setCfgCourse,addCourse,renameCourse,deleteCourse,unitModal,createUnit,delUnit,castModal,createCast,delCast,toggleCastTipo,
-    addPlayerModal,exportData,renderCfg,renderVent,renderDay,closeModal,confirmYes,renderHigh,setHighTab,openProfile };
+    addPlayerModal,exportData,renderCfg,renderVent,renderDay,closeModal,confirmYes,renderHigh,setHighTab,openProfile,rulesModal };
 })();
 App.init();
 </script>
